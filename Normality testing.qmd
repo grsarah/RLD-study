@@ -1,0 +1,990 @@
+---
+title: "Normality"
+author: "Sarah Green"
+format: html
+embed-resources: true
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| warning: false
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(rstatix)
+library(tidyr)
+library(kableExtra)
+
+
+df <- read_csv("FILTERED DATA.csv") %>%
+  mutate(OUTCOME = case_when(
+    (RESULT == "HIT" | RESULT == "GOAL" | RESULT == "BEHIND" | RESULT == "NO SCORE") ~ 'EFFECTIVE',
+    (RESULT == "NEUTRAL" | (RESULT == "NO DISPOSAL" & lead(TEAM_BALL == "STOPPAGE", 1)) | (RESULT == "NO DISPOSAL" & lead(TEAM_BALL == "OFFENCE WIN", 1))) ~ 'NEUTRAL',
+    (RESULT == "MISS" | (RESULT == "NO DISPOSAL" & lead(TEAM_BALL == "DEFENCE WIN", 1))) ~ 'INEFFECTIVE'
+  ))
+
+df.week <- df %>%
+  dplyr::group_by(WEEK, SETTING) %>%
+  summarise(
+    # TEAM WON BALL
+    OFF_WIN = sum(TEAM_BALL == "OFFENCE WIN", na.rm = T), 
+    DEF_WIN = sum(TEAM_BALL == "DEFENCE WIN", na.rm = T), 
+    STOPPAGE = sum(TEAM_BALL == "STOPPAGE", na.rm = T),
+    #POSS TYPE
+    MARK = sum(GAIN_POSS == "MARK", na.rm = T), 
+    GP = sum(GAIN_POSS == "GP", na.rm = T), 
+    GB = sum(GAIN_POSS == "GROUNDBALL-GET", na.rm = T), 
+    #DISPOAL TYPE
+    KICK = sum(DISPOSAL == "KICK", na.rm = T), 
+    HB = sum(DISPOSAL == "HANDBALL", na.rm = T), 
+    TACKLED = sum(DISPOSAL == "TACKLED", na.rm = T),
+    #TIP
+    DURATION_0_1S= sum(DURATION <=1, na.rm = T), 
+    DURATION_1_2S = sum(DURATION >1 & DURATION <=2, na.rm = T), 
+    DURATION_2_3S = sum(DURATION >2 & DURATION <=3, na.rm = T), 
+    DURATION_MORE3S = sum(DURATION >3, na.rm = T), 
+    #MOVEMENT
+    DYNAMIC = sum(MOVEMENT == "DYNAMIC", na.rm = T), 
+    STATIONARY = sum(MOVEMENT == "STATIONARY", na.rm = T), 
+    #PRESSURE
+    PHYSICAL = sum(PRESSURE == "PHYSICAL", na.rm = T), 
+    CLOSING = sum(PRESSURE == "CLOSING", na.rm = T), 
+    CHASING = sum(PRESSURE == "CHASING", na.rm = T), 
+    CORRALLING = sum(PRESSURE == "CORRALLING", na.rm = T), 
+    SET = sum(PRESSURE == "SET PRESSURE", na.rm = T), 
+    NO_PRESSURE = sum(PRESSURE == "NO PRESSURE", na.rm = T), 
+    #CARRIER DENSITY
+    MORE3_OPP = sum(CARRIER_DENSITY == "MORE 3 OPPO", na.rm = T), 
+    THREE_OPPO = sum(CARRIER_DENSITY == "3 OPPO", na.rm = T), 
+    TWO_OPPO = sum(CARRIER_DENSITY == "2 OPPO", na.rm = T), 
+    ONE_OPPO = sum(CARRIER_DENSITY == "1 OPPO", na.rm = T), 
+    NO_OPPO = sum(CARRIER_DENSITY == "NO OPP", na.rm = T), 
+    #DISTANCE
+    SHORT_DIST = sum(DISTANCE == "0-25M", na.rm = T), 
+    MEDIUM_DIST = sum(DISTANCE == "25-40M", na.rm = T), 
+    LONG_DIST = sum(DISTANCE == "40+", na.rm = T), 
+    DIST_NO = sum(DISTANCE == "NO DISPOSAL", na.rm = T),
+    #RECEIVER DENSITY
+    UNCONTESTED = sum(RECEIVER_DENSITY == "UNCONTESTED", na.rm = T),
+    EVEN = sum((RECEIVER_DENSITY == "EVEN") | (RECEIVER_DENSITY == "CONTEST"), na.rm = T),
+    SUPERIOR = sum(RECEIVER_DENSITY == "SUPERIOR", na.rm = T),
+    INFERIOR = sum(RECEIVER_DENSITY == "INFERIOR", na.rm = T),
+    LEADING = sum(RECEIVER_DENSITY == "LEADING", na.rm = T),
+    SHOT_GOAL = sum(RECEIVER_DENSITY == "SHOT AT GOAL", na.rm = T),
+    NO_RECIEVER = sum(RECEIVER_DENSITY == "NO RECEIVER", na.rm = T),
+    RECIEVE_NO = sum(RECEIVER_DENSITY == "NO DISPOSAL", na.rm = T),
+    #OUTCOME
+    EFFECTIVE = sum(OUTCOME == "EFFECTIVE", na.rm = T),
+    INEFFECTIVE = sum(OUTCOME == "INEFFECTIVE", na.rm = T),
+    NEUTRAL = sum(OUTCOME == "NEUTRAL", na.rm = T)
+    
+  ) %>%
+  distinct() %>%
+  mutate_if(is.numeric, round, digits = 2) %>%
+  pivot_longer(!c(SETTING, WEEK), names_to = "VARIABLE",  values_to = "VALUE")
+  
+
+
+```
+
+## 1. TRAINING
+
+```{r}
+#| echo: false
+#| warning: false
+
+df.training <- df.week[-23,] %>%
+  filter(SETTING == "TRAINING") 
+```
+
+1a) Shapiro wilk
+
+Team Won Ball: p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+teamwonball_shap <- df.training %>%
+  filter(VARIABLE %in% c("OFF_WIN", "DEF_WIN", "STOPPAGE")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+teamwonball_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Team Won Ball",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+teamwonball_plot <- df.training %>%
+  filter(VARIABLE %in% c("OFF_WIN", "DEF_WIN", "STOPPAGE"))
+  
+ggplot(teamwonball_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.02) +
+  theme(legend.position = "none")
+
+```
+
+Gain possession p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+gainposs_shap <- df.training %>%
+  filter(VARIABLE %in% c("MARK", "GP", "GB")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+gainposs_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Gained Possession",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+gainposs_plot <- df.training %>%
+    filter(VARIABLE %in% c("MARK", "GP", "GB"))
+
+ggplot(gainposs_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.05) +
+  theme(legend.position = "none")
+
+```
+
+Disposal p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+disposal_shap <- df.training %>%
+  filter(VARIABLE %in% c("KICK", "HB", "TACKLED")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+disposal_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Type",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+disposal_plot <- df.training %>%
+      filter(VARIABLE %in% c("KICK", "HB", "TACKLED"))
+
+ggplot(disposal_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.03) +
+  theme(legend.position = "none")
+```
+
+Duration p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+duration_shap <- df.training %>%
+  filter(VARIABLE %in% c("DURATION_0_1S", "DURATION_1_2S", "DURATION_2_3S", "DURATION_MORE3S")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+duration_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Duration",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+
+duration_plot <- df.training %>%
+  filter(VARIABLE %in% c("DURATION_0_1S", "DURATION_1_2S", "DURATION_2_3S", "DURATION_MORE3S"))
+
+ggplot(duration_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.03) +
+  theme(legend.position = "none")
+```
+
+Movement p\>0.05 (non-sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+movement_shap <- df.training %>%
+  filter(VARIABLE %in% c("DYNAMIC", "STATIONARY")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+movement_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Movement",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+movement_plot <- df.training %>%
+    filter(VARIABLE %in% c("DYNAMIC", "STATIONARY"))
+
+ggplot(movement_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.05) +
+  theme(legend.position = "none")
+```
+
+Pressure p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+pressure_shap <- df.training %>%
+  filter(VARIABLE %in% c("PHYSICAL", "CLOSING", "CHASING", "CORRALLING", "SET", "NO_PRESSURE")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+pressure_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Pressure",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+
+pressure_plot <- df.training %>%
+    filter(VARIABLE %in% c("PHYSICAL", "CLOSING", "CHASING", "CORRALLING", "SET", "NO_PRESSURE"))
+
+ggplot(pressure_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.02) +
+  theme(legend.position = "none")
+```
+
+Carrier density p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+density_shap <- df.training %>%
+  filter(VARIABLE %in% c("NO_OPPO", "ONE_OPPO", "TWO_OPPO", "THREE_OPPO", "MORE3_OPP")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+density_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Carrier Density",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+density_plot <- df.training %>%
+    filter(VARIABLE %in% c("NO_OPPO", "ONE_OPPO", "TWO_OPPO", "THREE_OPPO", "MORE3_OPP"))
+
+ggplot(density_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.04) +
+  theme(legend.position = "none")
+```
+
+Distance p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+distance_shap <- df.training %>%
+  filter(VARIABLE %in% c("DIST_NO", "SHORT_DIST", "MEDIUM_DIST", "LONG_DIST")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+distance_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Distance",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+distance_plot <- df.training %>%
+    filter(VARIABLE %in% c("DIST_NO", "SHORT_DIST", "MEDIUM_DIST", "LONG_DIST"))
+
+ggplot(distance_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.03) +
+  theme(legend.position = "none")
+```
+
+Receiver density p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+reciever_shap <- df.training %>%
+  filter(VARIABLE %in% c("EVEN", "SUPERIOR", "INFERIOR", "LEADING", "UNCONTESTED", "SHOT_GOAL", "RECIEVE_NO")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+reciever_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Receiever Density",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+reciever_plot <- df.training %>%
+    filter(VARIABLE %in% c("EVEN", "SUPERIOR", "INFERIOR", "LEADING", "UNCONTESTED", "SHOT_GOAL", "RECIEVE_NO"))
+
+ggplot(reciever_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.02) +
+  theme(legend.position = "none")
+```
+
+Outcome p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+result_shap <- df.training %>%
+  filter(VARIABLE %in% c("EFFECTIVE", "INEFFECTIVE", "NEUTRAL")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+result_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Outcome",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+result_plot <- df.training %>%
+    filter(VARIABLE %in% c("EFFECTIVE", "INEFFECTIVE", "NEUTRAL"))
+
+ggplot(result_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.02) +
+  theme(legend.position = "none")
+```
+
+## 2. MATCH
+
+```{r}
+#| echo: false
+#| warning: false
+
+df.match <- df.week[-23,] %>%
+  filter(SETTING == "MATCH")
+
+```
+
+Team Won Ball: p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+teamwonball_shap <- df.match %>%
+  filter(VARIABLE %in% c("OFF_WIN", "DEF_WIN", "STOPPAGE")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+teamwonball_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Team Won Ball",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+teamwonball_plot <- df.match %>%
+  filter(VARIABLE %in% c("OFF_WIN", "DEF_WIN", "STOPPAGE"))
+  
+ggplot(teamwonball_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.01) +
+  theme(legend.position = "none")
+
+```
+
+Gain possession p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+gainposs_shap <- df.match %>%
+  filter(VARIABLE %in% c("MARK", "GP", "GB")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+gainposs_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Gained Possession",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+gainposs_plot <- df.match %>%
+    filter(VARIABLE %in% c("MARK", "GP", "GB"))
+
+ggplot(gainposs_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.05) +
+  theme(legend.position = "none")
+
+```
+
+Disposal p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+disposal_shap <- df.match %>%
+  filter(VARIABLE %in% c("KICK", "HB", "TACKLED")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+disposal_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Type",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+disposal_plot <- df.match %>%
+      filter(VARIABLE %in% c("KICK", "HB", "TACKLED"))
+
+ggplot(disposal_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.03) +
+  theme(legend.position = "none")
+```
+
+Duration p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+duration_shap <- df.match %>%
+  filter(VARIABLE %in% c("DURATION_0_1S", "DURATION_1_2S", "DURATION_2_3S", "DURATION_MORE3S")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+duration_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Duration",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+
+duration_plot <- df.match %>%
+  filter(VARIABLE %in% c("DURATION_0_1S", "DURATION_1_2S", "DURATION_2_3S", "DURATION_MORE3S"))
+
+ggplot(duration_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.03) +
+  theme(legend.position = "none")
+```
+
+Movement p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+movement_shap <- df.match %>%
+  filter(VARIABLE %in% c("DYNAMIC", "STATIONARY")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+movement_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Movement",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+movement_plot <- df.match %>%
+    filter(VARIABLE %in% c("DYNAMIC", "STATIONARY"))
+
+ggplot(movement_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.05) +
+  theme(legend.position = "none")
+```
+
+Pressure p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+pressure_shap <- df.match %>%
+  filter(VARIABLE %in% c("PHYSICAL", "CLOSING", "CHASING", "CORRALLING", "SET", "NO_PRESSURE")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+pressure_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Pressure",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+
+pressure_plot <- df.match %>%
+    filter(VARIABLE %in% c("PHYSICAL", "CLOSING", "CHASING", "CORRALLING", "SET", "NO_PRESSURE"))
+
+ggplot(pressure_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.01) +
+  theme(legend.position = "none")
+```
+
+Carrier density p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+density_shap <- df.match %>%
+  filter(VARIABLE %in% c("NO_OPPO", "ONE_OPPO", "TWO_OPPO", "THREE_OPPO", "MORE3_OPP")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+density_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Carrier Density",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+density_plot <- df.match %>%
+    filter(VARIABLE %in% c("NO_OPPO", "ONE_OPPO", "TWO_OPPO", "THREE_OPPO", "MORE3_OPP"))
+
+ggplot(density_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.04) +
+  theme(legend.position = "none")
+```
+
+Distance p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+distance_shap <- df.match %>%
+  filter(VARIABLE %in% c("DIST_NO", "SHORT_DIST", "MEDIUM_DIST", "LONG_DIST")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+distance_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Distance",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+distance_plot <- df.match %>%
+    filter(VARIABLE %in% c("DIST_NO", "SHORT_DIST", "MEDIUM_DIST", "LONG_DIST"))
+
+ggplot(distance_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.03) +
+  theme(legend.position = "none")
+```
+
+Receiver density p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+reciever_shap <- df.match %>%
+  filter(VARIABLE %in% c("EVEN", "SUPERIOR", "INFERIOR", "LEADING", "UNCONTESTED", "SHOT_GOAL", "RECIEVE_NO")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+reciever_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Receiever Density",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+reciever_plot <- df.match %>%
+    filter(VARIABLE %in% c("EVEN", "SUPERIOR", "INFERIOR", "LEADING", "UNCONTESTED", "SHOT_GOAL", "RECIEVE_NO"))
+
+ggplot(reciever_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.02) +
+  theme(legend.position = "none")
+```
+
+Outcome p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+result_shap <- df.match %>%
+  filter(VARIABLE %in% c("EFFECTIVE", "INEFFECTIVE", "NEUTRAL")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+result_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Outcome",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+result_plot <- df.match %>%
+    filter(VARIABLE %in% c("EFFECTIVE", "INEFFECTIVE", "NEUTRAL"))
+
+ggplot(result_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.02) +
+  theme(legend.position = "none")
+```
+
+I50 p\>0.05 (non-sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+i50_shap <- df.match %>%
+  filter(VARIABLE == "I50") %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+i50_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - I50",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+i50_plot <- df.match %>%
+    filter(VARIABLE == "I50")
+
+ggplot(i50_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.02) +
+  theme(legend.position = "none")
+
+```
+
+Rebound 50
+
+```{r}
+#| echo: false
+#| warning: false
+
+rebound50_shap <- df.match %>%
+  filter(VARIABLE == "REBOUND50") %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+rebound50_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - I50",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+rebound50_plot <- df.match %>%
+    filter(VARIABLE == "REBOUND50")
+
+ggplot(rebound50_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.05) +
+  theme(legend.position = "none")
+```
+
+### 3. SETTING COMBINED
+
+```{r}
+#| echo: false
+#| warning: false
+
+df.overall <- df.week[-23,]
+```
+
+Team Won Ball: p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+teamwonball_shap <- df.overall %>%
+  filter(VARIABLE %in% c("OFF_WIN", "DEF_WIN", "COACH_FEED", "STOPPAGE")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+teamwonball_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Team Won Ball",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+teamwonball_plot <- df.overall %>%
+  filter(VARIABLE %in% c("OFF_WIN", "DEF_WIN", "COACH_FEED", "STOPPAGE"))
+  
+ggplot(teamwonball_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.02) +
+  theme(legend.position = "none")
+
+```
+
+Gain possession p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+gainposs_shap <- df.overall %>%
+  filter(VARIABLE %in% c("MARK", "GP", "GB")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+gainposs_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Gained Possession",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+gainposs_plot <- df.overall %>%
+    filter(VARIABLE %in% c("MARK", "GP", "GB"))
+
+ggplot(gainposs_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.02) +
+  theme(legend.position = "none")
+
+```
+
+Key moment p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+keymoment_shap <- df.overall %>%
+  filter(VARIABLE %in% c("CLEARENCE", "POST_MARKING_CONTEST")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+keymoment_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Key Moment",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+keymoment_plot <- df.overall %>%
+      filter(VARIABLE %in% c("CLEARENCE", "POST_MARKING_CONTEST"))
+
+ggplot(keymoment_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.02) +
+  theme(legend.position = "none")
+
+
+```
+
+Disposal p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+disposal_shap <- df.overall %>%
+  filter(VARIABLE %in% c("KICK", "HB", "TACKLED")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+disposal_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Type",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+disposal_plot <- df.overall %>%
+      filter(VARIABLE %in% c("KICK", "HB", "TACKLED"))
+
+ggplot(disposal_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.03) +
+  theme(legend.position = "none")
+```
+
+Duration p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+duration_shap <- df.overall %>%
+  filter(VARIABLE %in% c("DURATION_0_1S", "DURATION_1_2S", "DURATION_2_3S", "DURATION_MORE3S")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+duration_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Duration",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+
+duration_plot <- df.overall %>%
+  filter(VARIABLE %in% c("DURATION_0_1S", "DURATION_1_2S", "DURATION_2_3S", "DURATION_MORE3S"))
+
+ggplot(duration_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.03) +
+  theme(legend.position = "none")
+```
+
+Location p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+zone_shap <- df.overall %>%
+  filter(VARIABLE %in% c("D50_START", "DEF_MID_ARC_START", "OFF_MID_ARC_START", "F50_START")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+zone_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Location",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+zone_plot <- df.overall %>%
+  filter(VARIABLE %in% c("D50_START", "DEF_MID_ARC_START", "OFF_MID_ARC_START", "F50_START"))
+
+ggplot(zone_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.05) +
+  theme(legend.position = "none")
+```
+
+Movement p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+movement_shap <- df.overall %>%
+  filter(VARIABLE %in% c("DYNAMIC", "STATIONARY")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+movement_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Movement",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+movement_plot <- df.overall %>%
+    filter(VARIABLE %in% c("DYNAMIC", "STATIONARY"))
+
+ggplot(movement_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.05) +
+  theme(legend.position = "none")
+```
+
+Pressure p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+pressure_shap <- df.overall %>%
+  filter(VARIABLE %in% c("PHYSICAL", "CLOSING", "CHASING", "CORRALLING", "SET", "NO_PRESSURE")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+pressure_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Pressure",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+
+pressure_plot <- df.overall %>%
+    filter(VARIABLE %in% c("PHYSICAL", "CLOSING", "CHASING", "CORRALLING", "SET", "NO_PRESSURE"))
+
+ggplot(pressure_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  #geom_boxplot(width = 0.01) +
+  theme(legend.position = "none")
+```
+
+Carrier density p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+density_shap <- df.overall %>%
+  filter(VARIABLE %in% c("NO_OPPO", "ONE_OPPO", "TWO_OPPO", "THREE_OPPO", "MORE3_OPP")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+density_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Carrier Density",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+density_plot <- df.overall %>%
+    filter(VARIABLE %in% c("NO_OPPO", "ONE_OPPO", "TWO_OPPO", "THREE_OPPO", "MORE3_OPP"))
+
+ggplot(density_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.04) +
+  theme(legend.position = "none")
+```
+
+Distance p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+distance_shap <- df.overall %>%
+  filter(VARIABLE %in% c("DIST_NO", "SHORT_DIST", "MEDIUM_DIST", "LONG_DIST")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+distance_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Distance",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+distance_plot <- df.overall %>%
+    filter(VARIABLE %in% c("DIST_NO", "SHORT_DIST", "MEDIUM_DIST", "LONG_DIST"))
+
+ggplot(distance_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.03) +
+  theme(legend.position = "none")
+```
+
+Receiver density p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+reciever_shap <- df.overall %>%
+  filter(VARIABLE %in% c("EVEN", "SUPERIOR", "INFERIOR", "LEADING", "UNCONTESTED", "SHOT_GOAL", "RECIEVE_NO")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+reciever_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Receiever Density",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+reciever_plot <- df.overall %>%
+    filter(VARIABLE %in% c("EVEN", "SUPERIOR", "INFERIOR", "LEADING", "UNCONTESTED", "SHOT_GOAL", "RECIEVE_NO"))
+
+ggplot(reciever_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+ # geom_boxplot(width = 0.02) +
+  theme(legend.position = "none")
+```
+
+Outcome p\<0.05 (sig)
+
+```{r}
+#| echo: false
+#| warning: false
+
+result_shap <- df.overall %>%
+  filter(VARIABLE %in% c("EFFECTIVE", "INEFFECTIVE", "NEUTRAL")) %>%
+  ungroup() %>%
+  shapiro_test(VALUE)
+  
+result_shap %>% 
+  kbl(caption = "Shapiro-Wilk Test - Disposal Outcome",
+      col.names = c("Variable", "Statistic", "p-value")) %>%
+  kable_classic_2(full_width = FALSE)
+
+result_plot <- df.overall %>%
+    filter(VARIABLE %in% c("EFFECTIVE", "INEFFECTIVE", "NEUTRAL"))
+
+ggplot(result_plot, aes(x= VARIABLE, y = VALUE)) +
+  geom_violin(scale = "count", aes(fill = VARIABLE)) +
+  geom_boxplot(width = 0.02) +
+  theme(legend.position = "none")
+```
+
+### 

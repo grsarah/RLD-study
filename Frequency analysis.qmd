@@ -1,0 +1,1317 @@
+---
+title: "Statistical Analysis"
+author: "Sarah Green"
+format: html
+embed-resources: true
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| warning: false
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(rstatix)
+library(tidyr)
+library(kableExtra)
+library(tidyverse)
+library(rcompanion)
+library(fmsb)
+library(tibble)
+library(sjstats)
+library(readxl)
+library(patchwork)
+
+
+df <- read_csv("FILTERED DATA.csv") 
+
+df.relative <- read_csv("DESCRIPTIVE DATA2.csv")
+
+```
+
+::: panel-tabset
+## Research Q2: Team Won Ball
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+
+mannwhitney_teamwon <- df.relative %>%
+  select(SETTING, AVE_OFF_WIN_PERMIN, AVE_DEF_WIN_PERMIN, AVE_STOPPAGE_PERMIN) 
+
+mannwhitney_teamwon1 <- mannwhitney_teamwon %>%
+  rename("Offence win" = AVE_OFF_WIN_PERMIN,
+         "Defence win" = AVE_DEF_WIN_PERMIN,
+         "Stoppage" = AVE_STOPPAGE_PERMIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+ # with(data_frame(U = statistic, 
+  #          W = statistic + n1 * (n1 + 1) / 2,
+   #         Z = qnorm(p / 2),
+    #        p = p)) %>%
+  add_significance() 
+
+
+    
+  
+mannwhitney_teamwon1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - team won ball frequency per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+team.stats <- mannwhitney_teamwon1 %>%
+   # mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+
+team.plot <- df.relative %>%
+     select(SETTING, AVE_DEF_WIN_PERMIN, AVE_OFF_WIN_PERMIN, AVE_STOPPAGE_PERMIN) %>%
+  rename("Offence win" = AVE_OFF_WIN_PERMIN,
+         "Defence win" = AVE_DEF_WIN_PERMIN,
+         "Stoppage" = AVE_STOPPAGE_PERMIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p1 <- 
+team.plot %>%
+    mutate(Variable = factor(Variable, levels=c("Offence win", "Defence win", "Coach feed", "Stoppage"))) %>%
+  ggboxplot(
+  x = "Variable", y = "Value",
+  color = "SETTING", 
+  palette = c("deepskyblue4", "darkorange3"),
+ # palette =c("lightblue3", "orange"),
+  add = "jitter",
+  ylab = "Frequency per min") +
+  ylim(0,32) +
+    stat_pvalue_manual(
+      team.stats %>%
+        mutate(y.position = c(32, 17, 14)),
+      label = "p.signif",
+        hide.ns = TRUE,
+  ) +
+    font("x.text", size = 10) +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank())
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+Offence win effect size: r = -0.849 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+  mannwhitney_teamwon %>%
+  wilcox_effsize(AVE_OFF_WIN_PERMIN ~ SETTING)
+```
+
+Defence win effect size: r = -0.469 (medium-large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_teamwon %>%
+  wilcox_effsize(AVE_DEF_WIN_PERMIN ~ SETTING)
+```
+
+Stoppage effect size: r = 0.868 (Large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_teamwon %>%
+  wilcox_effsize(AVE_STOPPAGE_PERMIN ~ SETTING)
+```
+:::
+
+## Gain Possession
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+
+mannwhitney_gainposs <- df.relative %>%
+  select(SETTING, AVE_MARK_PERMIN, AVE_GP_PERMIN, AVE_GB_PERMIN)
+
+mannwhitney_gainposs1 <- mannwhitney_gainposs %>%
+  rename("Mark" = AVE_MARK_PERMIN,
+         "General play" = AVE_GP_PERMIN,
+         "Groundball" = AVE_GB_PERMIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_gainposs1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - gain possession frequency per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+gain.stats <- mannwhitney_gainposs1 %>%
+   # mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+   mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+gain.plot <- df.relative %>%
+     select(SETTING, AVE_GP_PERMIN, AVE_GB_PERMIN, AVE_MARK_PERMIN) %>%
+  rename("Mark" = AVE_MARK_PERMIN,
+         "General play" = AVE_GP_PERMIN,
+         "Groundball" = AVE_GB_PERMIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p2 <- 
+  gain.plot %>%
+      mutate(Variable = factor(Variable, levels=c("Mark", "General play", "Groundball"))) %>%
+  ggboxplot(
+  x = "Variable", y = "Value",
+  color = "SETTING", 
+ # palette =c("lightblue3", "orange"),
+    palette = c("deepskyblue4", "darkorange3"),
+  add = "jitter",
+  ylab = "Frequency per min") +
+    ylim(0,32) +
+    stat_pvalue_manual(
+      gain.stats %>%
+        mutate(y.position = c(7, 30, 30)),
+      label = "p.signif",
+      hide.ns = TRUE
+  ) +
+    font("x.text", size = 10) +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank())
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+Mark source effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+   mannwhitney_gainposs %>%
+  wilcox_effsize(AVE_MARK_PERMIN ~ SETTING)
+```
+
+GP source effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_gainposs %>%
+  wilcox_effsize(AVE_GP_PERMIN ~ SETTING)
+```
+
+GB source effect size: r = -0.678 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_gainposs %>%
+  wilcox_effsize(AVE_GB_PERMIN ~ SETTING)
+```
+:::
+
+## Disposal
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+mannwhitney_disposal <- df.relative %>%
+  select(SETTING, AVE_KICKS_PER60MIN, AVE_HB_PER60MIN, AVE_TACKLED)
+
+mannwhitney_disposal1 <- mannwhitney_disposal %>%
+  rename("Kick" = AVE_KICKS_PERMIN,
+         "Handball" = AVE_HB_PERMIN,
+         "Tackled no disposal" = AVE_TACKLED) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_disposal1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - disposal frequency per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+disposal.stats <- mannwhitney_disposal1 %>%
+    #mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+   mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+disposal.plot <- df.relative %>%
+     select(SETTING, AVE_HB_PERMIN, AVE_KICKS_PERMIN, AVE_TACKLED) %>%
+  rename("Kick" = AVE_KICKS_PERMIN,
+         "Handball" = AVE_HB_PERMIN,
+         "Tackled no disposal" = AVE_TACKLED) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p3 <- 
+disposal.plot %>%
+      mutate(Variable = factor(Variable, levels=c("Kick", "Handball", "Tackled no disposal"))) %>%
+  ggboxplot(
+  x = "Variable", y = "Value",
+  color = "SETTING", 
+  palette = c("deepskyblue4", "darkorange3"),
+ # palette =c("lightblue3", "orange"),
+  add = "jitter",
+  ylab = "Frequency per min") +
+    ylim(0,32) +
+    stat_pvalue_manual(
+      disposal.stats %>%
+        mutate(y.position = c(20, 28, 15)),
+      label = "p.signif",
+      hide.ns = TRUE
+  ) +
+    font("x.text", size = 10) +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank())
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+Kick effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+    mannwhitney_disposal %>%
+  wilcox_effsize(AVE_KICKS_PERMIN ~ SETTING)
+```
+
+Handball effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+    mannwhitney_disposal %>%
+  wilcox_effsize(AVE_HB_PERMIN ~ SETTING)
+```
+
+Tackled no disposal effect size: r = -0.147 (small effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+    mannwhitney_disposal %>%
+  wilcox_effsize(AVE_TACKLED ~ SETTING)
+```
+:::
+:::
+
+::: panel-tabset
+## Research Q2: Duration
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+
+mannwhitney_duration <- df.relative %>%
+  select(SETTING, AVE_DURATION_0_1S_PERMIN, AVE_DURATION_1_2S_PERMIN, AVE_DURATION_2_3S_PERMIN, AVE_DURATION_MORE3S_PERMIN)
+
+mannwhitney_duration1 <- mannwhitney_duration %>%
+  rename("0-1s" = AVE_DURATION_0_1S_PERMIN,
+         "1-2s" = AVE_DURATION_1_2S_PERMIN,
+         "2-3s" = AVE_DURATION_2_3S_PERMIN,
+         "3s+" = AVE_DURATION_MORE3S_PERMIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_duration1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - duration frequency per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+duration.stats <- mannwhitney_duration1 %>%
+   # mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+   mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+duration.plot <- df.relative %>%
+     select(SETTING, AVE_DURATION_0_1S_PERMIN, AVE_DURATION_1_2S_PERMIN, AVE_DURATION_2_3S_PERMIN, AVE_DURATION_MORE3S_PERMIN) %>%
+  rename("0-1s" = AVE_DURATION_0_1S_PERMIN,
+         "1-2s" = AVE_DURATION_1_2S_PERMIN,
+         "2-3s" = AVE_DURATION_2_3S_PERMIN,
+         "3s+" = AVE_DURATION_MORE3S_PERMIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p4 <- 
+duration.plot %>%
+  ggboxplot(
+  x = "Variable", y = "Value",
+  color = "SETTING", 
+  palette = c("deepskyblue4", "darkorange3"),
+ # palette =c("lightblue3", "orange"),
+  add = "jitter",
+  ylab = "Frequency per min") +
+    ylim(0,32) +
+    stat_pvalue_manual(
+      duration.stats %>%
+        mutate(y.position = c(32, 18, 10, 10)),
+      label = "p.signif",
+      hide.ns = TRUE
+  ) +
+    font("x.text", size = 10) +
+ # labs(x = "Disposal Duration") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank())
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+0-1s effect size: r = -0.623 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+    mannwhitney_duration %>%
+  wilcox_effsize(AVE_DURATION_0_1S_PERMIN ~ SETTING)
+```
+
+1-2s disposal effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_duration %>%
+  wilcox_effsize(AVE_DURATION_1_2S_PERMIN ~ SETTING)
+```
+
+2-3s disposal effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_duration %>%
+  wilcox_effsize(AVE_DURATION_2_3S_PERMIN ~ SETTING)
+```
+
+3+s disposal effect size: r = -0.846 (Large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_duration %>%
+  wilcox_effsize(AVE_DURATION_MORE3S_PERMIN ~ SETTING)
+```
+:::
+
+## Movement
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_movement <- df.relative %>%
+  select(SETTING, AVE_DYNAMIC_PER60MIN, AVE_STATIONARY_PERMIN)
+  # mutate(SETTING = case_when(
+  #   SETTING == "MATCH" ~ 1,
+  #   SETTING == "TRAINING" ~2
+ #  ))
+   mannwhitney_movement1 <- mannwhitney_movement %>%
+ rename("Dynamic" = AVE_DYNAMIC_PERMIN,
+         "Stationary" = AVE_STATIONARY_PERMIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+    
+
+mannwhitney_movement1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - movement type frequency per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+movement.stats <- mannwhitney_movement1 %>%
+  #  mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+movement.plot <- df.relative %>%
+     select(SETTING, AVE_DYNAMIC_PERMIN, AVE_STATIONARY_PERMIN) %>%
+  rename("Dynamic" = AVE_DYNAMIC_PERMIN,
+         "Stationary" = AVE_STATIONARY_PERMIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p6 <- 
+movement.plot %>%
+  ggboxplot(
+  x = "Variable", y = "Value",
+  color = "SETTING", palette =c("lightblue3", "orange"),
+  add = "jitter",
+  ylab = "Frequency per min") +
+    ylim(0,45) +
+    stat_pvalue_manual(
+      movement.stats %>%
+        mutate(y.position = c(45, 18)),
+      label = "p.signif",
+      hide.ns = TRUE
+  ) +
+    font("x.text", size = 10) +
+  #labs(x = "Disposal Movement Type") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank())
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+Stationary disposal effect size: r = -0.386 (medium effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+  mannwhitney_movement %>%
+  wilcox_effsize(AVE_STATIONARY_PERMIN ~ SETTING)
+```
+
+Dynamic disposal effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_movement %>%
+  wilcox_effsize(AVE_DYNAMIC_PERMIN ~ SETTING)
+```
+:::
+
+## Pressure
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_pressure <- df.relative %>%
+  select(SETTING, AVE_PHYSICAL_PER_MIN, AVE_CLOSING_PER_MIN, AVE_CHASING_PER_MIN, AVE_CORRALLING_PER_MIN, AVE_NO_PRESSURE_PER_MIN)
+ 
+  mannwhitney_pressure1 <-  mannwhitney_pressure %>%
+  rename("Physical" = AVE_PHYSICAL_PER_MIN,
+         "Closing" = AVE_CLOSING_PER_MIN,
+         "Chasing" = AVE_CHASING_PER_MIN,
+         "Corralling" = AVE_CORRALLING_PER_MIN,
+         "No pressure" = AVE_NO_PRESSURE_PER_MIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+     mutate(Variable = factor(Variable, levels=c("Physical", "Closing", "Chasing", "Corralling", "No pressure"))) %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_pressure1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - pressure frequency per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+pressure.stats <- mannwhitney_pressure1 %>%
+    #mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+pressure.plot <- df.relative %>%
+       select(SETTING, AVE_CHASING_PER_MIN, AVE_CLOSING_PER_MIN, AVE_CORRALLING_PER_MIN, AVE_NO_PRESSURE_PER_MIN, AVE_PHYSICAL_PER_MIN) %>%
+  rename("Physical" = AVE_PHYSICAL_PER_MIN,
+         "Closing" = AVE_CLOSING_PER_MIN,
+         "Chasing" = AVE_CHASING_PER_MIN,
+         "Corralling" = AVE_CORRALLING_PER_MIN,
+         "No pressure" = AVE_NO_PRESSURE_PER_MIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p7 <- 
+pressure.plot %>%
+      mutate(Variable = factor(Variable, levels=c("Physical", "Closing", "Chasing", "Corralling", "No pressure"))) %>%
+  ggboxplot(
+  x = "Variable", y = "Value",
+  color = "SETTING", 
+  palette = c("deepskyblue4", "darkorange3"),
+ # palette =c("lightblue3", "orange"),
+  add = "jitter",
+  ylab = "Frequency per min") +
+    ylim(0,32) +
+    stat_pvalue_manual(
+      pressure.stats %>%
+        mutate(y.position = c(20, 18, 13, 19, 8)),
+      label = "p.signif",
+      hide.ns = TRUE
+  ) +
+    font("x.text", size = 10) +
+ # labs(x = "Pressure Type") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank())
+
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+Physical pressure effect size: r = -0.65 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+   mannwhitney_pressure %>%
+  wilcox_effsize(AVE_PHYSICAL_PER_MIN ~ SETTING)
+```
+
+Closing pressure effect size: r = -0.484 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_pressure %>%
+  wilcox_effsize(AVE_CLOSING_PER_MIN ~ SETTING)
+```
+
+Chasing pressure effect size: r = -0.736 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_pressure %>%
+  wilcox_effsize(AVE_CHASING_PER_MIN ~ SETTING)
+```
+
+Corralling pressure effect size: r = -0.678 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_pressure %>%
+  wilcox_effsize(AVE_CORRALLING_PER_MIN ~ SETTING)
+```
+
+No pressure effect size: r = -0.61 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_pressure %>%
+  wilcox_effsize(AVE_NO_PRESSURE_PER_MIN ~ SETTING)
+```
+:::
+:::
+
+::: panel-tabset
+## Research Q2: Carrier Density
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_oppo <- df.relative %>%
+  select(SETTING, AVE_MORE3_OPPO_PERMIN, AVE_THREE_OPPO_PERMIN, AVE_TWO_OPPO_PER_MIN, AVE_ONE_OPPO_PER_MIN, AVE_NO_OPPO_PER_MIN)
+ 
+  mannwhitney_oppo1 <-  mannwhitney_oppo %>%
+  rename("3+ oppo" = AVE_MORE3_OPPO_PERMIN,
+         "3 oppo" = AVE_THREE_OPPO_PERMIN,
+         "2 oppo" = AVE_TWO_OPPO_PER_MIN,
+         "1 oppo" = AVE_ONE_OPPO_PER_MIN,
+         "0 oppo" = AVE_NO_OPPO_PER_MIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_oppo1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - carrier density frequency per 2min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+oppo.stats <- mannwhitney_oppo1 %>%
+    #mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+oppo.plot <- df.relative %>%
+       select(SETTING, AVE_NO_OPPO_PER_MIN, AVE_ONE_OPPO_PER_MIN, AVE_TWO_OPPO_PER_MIN, AVE_THREE_OPPO_PERMIN, AVE_MORE3_OPPO_PERMIN) %>%
+  rename("3+ oppo" = AVE_MORE3_OPPO_PERMIN,
+         "3 oppo" = AVE_THREE_OPPO_PERMIN,
+         "2 oppo" = AVE_TWO_OPPO_PER_MIN,
+         "1 oppo" = AVE_ONE_OPPO_PER_MIN,
+         "0 oppo" = AVE_NO_OPPO_PER_MIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p8 <- 
+  oppo.plot %>%
+  ggboxplot(
+  x = "Variable", y = "Value",
+  color = "SETTING", 
+  palette = c("deepskyblue4", "darkorange3"),
+  #palette =c("lightblue3", "orange"),
+  add = "jitter",
+  ylab = "Frequency per min") +
+    ylim(0,32) +
+    stat_pvalue_manual(
+      oppo.stats %>%
+        mutate(y.position = c(7, 12, 22, 17, 13)),
+      label = "p.signif",
+      hide.ns = TRUE
+  ) +
+    font("x.text", size = 10) +
+ # labs(x = "Carrier Density") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank())
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+3+ oppo effect size: r = 0.26 (small-medium effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+  mannwhitney_oppo %>%
+  wilcox_effsize(AVE_MORE3_OPPO_PERMIN ~ SETTING)
+```
+
+3 oppo effect size: r = 0.091 (small effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_oppo %>%
+  wilcox_effsize(AVE_THREE_OPPO_PERMIN ~ SETTING)
+```
+
+2 oppo effect size: r = -0.49 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_oppo %>%
+  wilcox_effsize(AVE_TWO_OPPO_PER_MIN ~ SETTING)
+```
+
+1 oppo effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_oppo %>%
+  wilcox_effsize(AVE_ONE_OPPO_PER_MIN ~ SETTING)
+```
+
+No oppo effect size: r = -0.637 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_oppo %>%
+  wilcox_effsize(AVE_NO_OPPO_PER_MIN ~ SETTING)
+```
+:::
+
+## Distance
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_dist <- df.relative %>%
+  select(SETTING, AVE_SHORT_DIST_PERMIN, AVE_MEDIUM_DIST_PERMIN, AVE_NO_DIST)
+ 
+ mannwhitney_dist1 <- mannwhitney_dist %>%
+  rename("0-25m" = AVE_SHORT_DIST_PERMIN,
+         "25-40m" = AVE_MEDIUM_DIST_PERMIN,
+         "Tackled - no distance" = AVE_NO_DIST) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_dist1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - disposal distance frequency per 2min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+dist.stats <- mannwhitney_dist1 %>%
+   # mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+dist.plot <- df.relative %>%
+       select(SETTING, AVE_SHORT_DIST_PERMIN, AVE_MEDIUM_DIST_PERMIN, AVE_NO_DIST) %>%
+  rename("0-25m" = AVE_SHORT_DIST_PERMIN,
+         "25-40m" = AVE_MEDIUM_DIST_PERMIN,
+         "Tackled - no distance" = AVE_NO_DIST) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p9 <- 
+dist.plot %>%
+  ggboxplot(
+  x = "Variable", y = "Value",
+  color = "SETTING", palette =c("lightblue3", "orange"),
+  add = "jitter",
+  ylab = "Frequency per min") +
+    ylim(0,32) +
+    stat_pvalue_manual(
+      dist.stats %>%
+        mutate(y.position = c(30, 17, 14)),
+      label = "p.signif",
+      hide.ns = TRUE
+  ) +
+    font("x.text", size = 10) +
+ # labs(x = "Disposal Distance") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank())
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+0-25m disposal effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+  mannwhitney_dist %>%
+  wilcox_effsize(AVE_SHORT_DIST_PERMIN ~ SETTING)
+```
+
+25-40m disposal effect size: r = -0.834 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_dist %>%
+  wilcox_effsize(AVE_MEDIUM_DIST_PERMIN ~ SETTING)
+```
+
+Tackled - no distance effect size: r = -0.091 (small effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+     mannwhitney_dist %>%
+  wilcox_effsize(AVE_NO_DIST ~ SETTING)
+```
+:::
+
+## Receiver density
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ 
+ mannwhitney_receiver <- df.relative %>%
+  select(SETTING, AVE_EVEN_PERMIN, AVE_SUPERIOR_PERMIN, AVE_INFERIOR_PERMIN, AVE_LEADING_PERMIN, AVE_UNCONTESTED_PERMIN, AVE_NO_RECIEVER_PERMIN, AVE_RECIVEER_NO, AVE_SHOT_GOAL_PERMIN)
+ 
+  mannwhitney_receiver1 <-  mannwhitney_receiver %>%
+  rename("Even" = AVE_EVEN_PERMIN,
+         "Superior" = AVE_SUPERIOR_PERMIN,
+         "Inferior" = AVE_INFERIOR_PERMIN,
+         "Leading" = AVE_LEADING_PERMIN,
+         "Uncontested" = AVE_UNCONTESTED_PERMIN,
+         "No receiver" = AVE_NO_RECIEVER_PERMIN,
+         "Tackled" = AVE_RECIVEER_NO,
+         "Shot at goal" = AVE_SHOT_GOAL_PERMIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+    mutate(Variable = factor(Variable, levels=c("Uncontested", "Even", "Superior", "Inferior", "Leading", "No receiver", "Shot at goal", "Tackled"))) %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_receiver1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - receiver density frequency per 2min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+receiver.stats <- mannwhitney_receiver1 %>%
+ # mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+receiver.plot <- df.relative %>%
+       select(SETTING, AVE_EVEN_PERMIN, AVE_INFERIOR_PERMIN, AVE_LEADING_PERMIN, AVE_NO_RECIEVER_PERMIN, AVE_SHOT_GOAL_PERMIN, AVE_SUPERIOR_PERMIN, AVE_RECIVEER_NO, AVE_UNCONTESTED_PERMIN) %>%
+  rename("Even" = AVE_EVEN_PERMIN,
+         "Superior" = AVE_SUPERIOR_PERMIN,
+         "Inferior" = AVE_INFERIOR_PERMIN,
+         "Leading" = AVE_LEADING_PERMIN,
+         "Uncontested" = AVE_UNCONTESTED_PERMIN,
+         "No receiver" = AVE_NO_RECIEVER_PERMIN,
+         "Tackled" = AVE_RECIVEER_NO,
+         "Shot at goal" = AVE_SHOT_GOAL_PERMIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p10 <- 
+  receiver.plot %>%
+      mutate(Variable = factor(Variable, levels=c("Uncontested", "Even", "Superior", "Inferior", "Leading", "No receiver", "Shot at goal", "Tackled"))) %>%
+  ggboxplot(
+  x = "Variable", y = "Value",
+  color = "SETTING", palette =c("lightblue3", "orange"),
+  add = "jitter",
+  ylab = "Frequency per min") +
+    ylim(0,32) +
+    stat_pvalue_manual(
+      receiver.stats %>%
+        mutate(y.position = c(32, 9, 5, 5, 5, 5, 3, 13)),
+      label = "p.signif",
+      hide.ns = TRUE
+  ) +
+font("x.text", size = 9) +
+#  labs(x = "Receiver Density") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank())
+
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### 
+
+#### Effect size
+
+Even receiver density effect size: r = -0.61 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+  mannwhitney_receiver %>%
+  wilcox_effsize(AVE_EVEN_PERMIN ~ SETTING)
+```
+
+Superior receiver density effect size: r = 0.213 (small effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_receiver %>%
+  wilcox_effsize(AVE_SUPERIOR_PERMIN ~ SETTING)
+```
+
+Inferior receiver density effect size: r = 0.499 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_receiver %>%
+  wilcox_effsize(AVE_INFERIOR_PERMIN ~ SETTING)
+```
+
+Leading receiver density effect size: r = 0.339 (medium effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_receiver %>%
+  wilcox_effsize(AVE_LEADING_PERMIN ~ SETTING)
+```
+
+\
+Uncontested receiver density effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_receiver %>%
+  wilcox_effsize(AVE_UNCONTESTED_PERMIN ~ SETTING)
+```
+
+Shot goal effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_receiver %>%
+  wilcox_effsize(AVE_SHOT_GOAL_PERMIN ~ SETTING)
+```
+
+No receiver effect size: r = -0.049 (small effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_receiver %>%
+  wilcox_effsize(AVE_NO_RECIEVER_PERMIN ~ SETTING)
+```
+
+Tackled - no receiver effect size: r = -0.147 (small effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_receiver %>%
+  wilcox_effsize(AVE_RECIVEER_NO ~ SETTING)
+```
+:::
+:::
+
+::: panel-tabset
+## Research Q3: MANOVA
+
+::: panel-tabset
+Does disposal efficiency outcome differ between training and matches for high-pressure moments?
+
+```{r}
+#| echo: false
+#| warning: false
+
+result.df <- lm(cbind(AVE_EFFECTIVE_PERMIN, AVE_INEFFECTIVE_PERMIN, AVE_NEUTRAL_PERMIN) ~ SETTING, df.relative)
+
+
+Manova(result.df, test.statistic = "Pillai")
+
+
+```
+:::
+
+Significant overall difference in disposal outcomes between training & match.
+
+::: panel-tabset
+#### Mann-Whitney
+
+```{r}
+#| echo: false
+#| warning: false
+
+mannwhitney_outcome <- df.relative %>%
+  select(SETTING, AVE_EFFECTIVE_PERMIN, AVE_INEFFECTIVE_PERMIN, AVE_NEUTRAL_PERMIN)
+
+mannwhitney_outcome1 <- mannwhitney_outcome %>%
+  rename("Effective" = AVE_EFFECTIVE_PERMIN,
+         "Ineffective" = AVE_INEFFECTIVE_PERMIN,
+         "Neutral" = AVE_NEUTRAL_PERMIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+        mutate(Variable = factor(Variable, levels=c("Effective", "Neutral", "Ineffective"))) %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_outcome1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - outcome frequency per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+outcome.stats <- mannwhitney_outcome1 %>%
+   # mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+        mutate(Variable = factor(Variable, levels=c("Effective", "Neutral", "Ineffective"))) %>%
+    add_xy_position(x = "Variable")
+
+outcome.plot <- df.relative %>%
+       select(SETTING, AVE_EFFECTIVE_PERMIN, AVE_INEFFECTIVE_PERMIN, AVE_NEUTRAL_PERMIN) %>%
+  rename("Effective" = AVE_EFFECTIVE_PERMIN,
+         "Ineffective" = AVE_INEFFECTIVE_PERMIN,
+         "Neutral" = AVE_NEUTRAL_PERMIN) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+outcome.plot %>%
+      mutate(Variable = factor(Variable, levels=c("Effective", "Neutral", "Ineffective"))) %>%
+  ggboxplot(
+  x = "Variable", y = "Value",
+  color = "SETTING", 
+  palette = c("deepskyblue4", "darkorange3"),
+  #palette =c("lightblue3", "orange"),
+  add = "jitter",
+  ylab = "Frequency per min") +
+    stat_pvalue_manual(
+      outcome.stats %>%
+        mutate(y.position = c(30, 16, 20)),
+      label = "p.signif",
+      hide.ns = TRUE
+  ) +
+      ylim(0,32) +
+ # labs(x = "Disposal Outcome") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank())
+
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+Effective disposal effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+ 
+  mannwhitney_outcome %>%
+  wilcox_effsize(AVE_EFFECTIVE_PERMIN ~ SETTING)
+```
+
+Ineffective disposal effect size: r = -0.819 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+ 
+ mannwhitney_outcome %>%
+  wilcox_effsize(AVE_INEFFECTIVE_PERMIN ~ SETTING)
+```
+
+Neutral disposal effect size: r = 0.077 (small effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+ 
+ mannwhitney_outcome %>%
+  wilcox_effsize(AVE_NEUTRAL_PERMIN ~ SETTING)
+```
+:::
+:::

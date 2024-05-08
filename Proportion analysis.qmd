@@ -1,0 +1,1418 @@
+---
+title: "% Statistical Analysis"
+author: "Sarah Green"
+format: html
+embed-resources: true
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| warning: false
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(rstatix)
+library(tidyr)
+library(kableExtra)
+library(tidyverse)
+library(rcompanion)
+library(fmsb)
+library(tibble)
+library(patchwork)
+
+df <- read_csv("FILTERED DATA.csv") 
+
+df.relative <- read_csv("PERCENT DATA2.csv") %>%
+  replace(is.na(.), 0)
+
+```
+
+::: panel-tabset
+## Research Q1:
+
+Is the level of pressure experienced similar between training and matches?
+
+Mann-Whitney U-test
+
+```{r}
+#| echo: false
+#| warning: false
+pressure.df <- df %>%
+  group_by(SETTING, WEEK) %>%
+  summarise(mean_pressure = mean(PRESSURE_POINTS, na.rm = T)) %>%
+  ungroup() %>%
+  select(-WEEK)
+
+
+mannwhitney_pressure <- pressure.df[-23,] %>%
+  wilcox_test(mean_pressure ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance()
+
+mannwhitney_pressure %>% 
+  kbl(caption = "Mann-Whitney U-Test on AveragePressure Rating between Training & Match") %>%
+  kable_classic_2(full_width = FALSE)
+
+pressure.df[-23,] %>%
+ggboxplot(
+  x = "SETTING", y = "mean_pressure",
+  #color = "SETTING", palette = c("deepskyblue4", "darkorange3"), fill = "lightgray",
+ color = "SETTING", palette =c("lightblue3", "orange"),
+  add = "jitter",
+  xlab = "", ylab = "Average pressure points per min") +
+    stat_pvalue_manual(
+      mannwhitney_pressure %>%
+        mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+        mutate(y.position = 2.8),
+      label = "p.signif"
+  ) +
+  #labs(title = "Average Pressure Rating of Training & matches") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "none") 
+
+
+```
+
+'\*\*' indicates significant difference in average pressure between settings (p\<0.05).
+
+Effect size:
+
+```{r}
+#| echo: false
+#| warning: false
+#library(rcompanion)
+#wilcoxonR(x = pressure.df$mean_pressure,
+    #      g = pressure.df$SETTING,
+     #     ci=TRUE)
+pressure.df %>%
+  wilcox_effsize(mean_pressure ~ SETTING)
+```
+
+::: panel-tabset
+r = 0.569 (Large effect).
+:::
+
+## 
+:::
+
+::: panel-tabset
+## Research Q2: Team Won Ball
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+
+mannwhitney_teamwon <- df.relative %>%
+  select(SETTING, OFF_WIN_PERCENT, DEF_PERCENT, STOPPAGE_PERCENT) 
+mannwhitney_teamwon1 <- mannwhitney_teamwon %>%
+  rename("Offence win" = OFF_WIN_PERCENT,
+         "Defence win" = DEF_PERCENT,
+         "Stoppage" = STOPPAGE_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+    mutate(Variable = factor(Variable, levels=c("Offence win", "Defence win", "Stoppage"))) %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_teamwon1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - team won ball proportions per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+team.stats <- mannwhitney_teamwon1 %>%
+      #mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+team.plot <- df.relative %>%
+     select(SETTING, DEF_PERCENT, OFF_WIN_PERCENT, STOPPAGE_PERCENT) %>%
+  rename("Offence win" = OFF_WIN_PERCENT,
+         "Defence win" = DEF_PERCENT,
+         "Stoppage" = STOPPAGE_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") 
+#p1 <- 
+  team.plot %>%
+  mutate(Variable = factor(Variable, levels=c("Offence win", "Defence win", "Stoppage"))) %>%
+  ggbarplot(
+    position = position_dodge(0.8),
+    add = "mean_sd", lab.vjust = -2.2,
+   # add = "mean",
+    label = FALSE,
+    #lab.nb.digits = 2,
+  x = "Variable", y = "Value",
+  fill = "SETTING",   palette = c("deepskyblue4", "darkorange3"),
+ # palette =c("lightblue3", "orange"), #alpha = 0.5,
+
+  ylab = "% of frequency per min") +
+  ylim(0,100) +
+    stat_pvalue_manual(
+      team.stats %>%
+        mutate(y.position = c(100, 35, 30)),
+      hide.ns = TRUE
+  ) +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank(), axis.text.x = element_text(size = 10))
+
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+Offence win effect size: r = -0.834 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+ 
+ mannwhitney_teamwon %>%
+  wilcox_effsize(OFF_WIN_PERCENT~ SETTING)
+```
+
+Defence win effect size: r = 0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_teamwon %>%
+  wilcox_effsize(DEF_PERCENT~ SETTING)
+```
+
+Stoppage effect size: r = 0.868 (Large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_teamwon %>%
+  wilcox_effsize(STOPPAGE_PERCENT~ SETTING)
+```
+:::
+
+## Gain Possession
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+
+mannwhitney_gainposs <- df.relative %>%
+  select(SETTING, MARK_PERCENT, GP_PERCENT, GB_PERCENT)
+
+mannwhitney_gainposs1 <- mannwhitney_gainposs %>%
+  rename("Mark" = MARK_PERCENT,
+         "General play" = GP_PERCENT,
+         "Groundball" = GB_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+      mutate(Variable = factor(Variable, levels=c("Mark", "General play", "Groundball"))) %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_gainposs1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - gain possession proportions per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+gain.stats <- mannwhitney_gainposs1 %>%
+    #  mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+gain.plot <- df.relative %>%
+    select(SETTING, GP_PERCENT, GB_PERCENT, MARK_PERCENT) %>%
+  rename("Mark" = MARK_PERCENT,
+         "General play" = GP_PERCENT,
+         "Groundball" = GB_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p2 <- 
+  gain.plot %>%
+    mutate(Variable = factor(Variable, levels=c("Mark", "General play", "Groundball"))) %>%
+  ggbarplot(
+    position = position_dodge(0.8),
+    add = "mean_sd", lab.vjust = -4.3,
+   # add = "mean",
+    label = FALSE,
+   # lab.nb.digits = 2,
+  x = "Variable", y = "Value",
+  fill = "SETTING", palette =c("lightblue3", "orange"),
+  ylab = "% of frequency per min") +
+    ylim(0,100) +
+    stat_pvalue_manual(
+      gain.stats %>%
+        mutate(y.position = c(25, 80, 65)),
+      hide.ns = TRUE
+  ) +
+  labs(x = "Gain Possession") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank(), axis.text.x = element_text(size = 10))
+
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+Mark source effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+ 
+ mannwhitney_gainposs %>%
+  wilcox_effsize(MARK_PERCENT~ SETTING)
+```
+
+GP source effect size: r = -0.279 (medium effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+  mannwhitney_gainposs %>%
+  wilcox_effsize(GP_PERCENT~ SETTING)
+```
+
+GB source effect size: r = 0.693 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+  mannwhitney_gainposs %>%
+  wilcox_effsize(GB_PERCENT~ SETTING)
+```
+:::
+
+## Disposal
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+mannwhitney_disposal <- df.relative %>%
+  select(SETTING, KICK_PERCENT, HB_PERCENT, TACKLED_PERCENT)
+mannwhitney_disposal1 <- mannwhitney_disposal %>%
+  rename("Kick" = KICK_PERCENT,
+         "Handball" = HB_PERCENT,
+         "Tackled no disposal" = TACKLED_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  mutate(Variable = factor(Variable, levels=c("Kick", "Handball", "Tackled no disposal"))) %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_disposal1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - disposal proportions per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+disposal.stats <- mannwhitney_disposal1 %>%
+     # mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+disposal.plot <- df.relative %>%
+     select(SETTING, HB_PERCENT, KICK_PERCENT, TACKLED_PERCENT) %>%
+  rename("Kick" = KICK_PERCENT,
+         "Handball" = HB_PERCENT,
+         "Tackled no disposal" = TACKLED_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p3 <- 
+disposal.plot %>%
+    mutate(Variable = factor(Variable, levels=c("Kick", "Handball", "Tackled no disposal"))) %>%
+  ggbarplot(
+    position = position_dodge(0.8),
+    add = "mean_sd", lab.vjust = -3.2,
+    #add = "mean",
+    label = FALSE,
+   # lab.nb.digits = 2,
+  x = "Variable", y = "Value",
+  fill = "SETTING", #palette = c("lightblue3", "orange"), #alpha = 0.5,
+palette = c("deepskyblue4", "darkorange3"),
+  ylab = "% of frequency per min") +
+    ylim(0,100) +
+    stat_pvalue_manual(
+      disposal.stats %>%
+        mutate(y.position = c(50, 75, 30)),
+      hide.ns = TRUE
+  ) +
+  labs(x = "Disposal Type") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank(), axis.text.x = element_text(size = 10))
+
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+Kick effect size: r = -0.595 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+  mannwhitney_disposal %>%
+  wilcox_effsize(KICK_PERCENT~ SETTING)
+```
+
+Handball effect size: r = -0.356 (medium effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+  mannwhitney_disposal %>%
+  wilcox_effsize(HB_PERCENT~ SETTING)
+```
+
+Tackled no disposal effect size: r = 0.791 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+   mannwhitney_disposal %>%
+  wilcox_effsize(TACKLED_PERCENT~ SETTING)
+```
+:::
+:::
+
+::: panel-tabset
+## Research Q2: Duration
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+
+mannwhitney_duration <- df.relative %>%
+  select(SETTING, DUR_01_PERCENT, DUR_12_PERCENT, DUR_23_PERCENT, DUR_3MORE_PERCENT)
+
+mannwhitney_duration1 <- mannwhitney_duration %>%
+  rename("0-1s" = DUR_01_PERCENT,
+         "1-2s" = DUR_12_PERCENT,
+         "2-3s" = DUR_23_PERCENT,
+         "3s+" = DUR_3MORE_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_duration1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - duration proprtions per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+duration.stats <- mannwhitney_duration1 %>%
+     # mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+duration.plot <- df.relative %>%
+       select(SETTING, DUR_01_PERCENT, DUR_12_PERCENT, DUR_23_PERCENT, DUR_3MORE_PERCENT) %>%
+  rename("0-1s" = DUR_01_PERCENT,
+         "1-2s" = DUR_12_PERCENT,
+         "2-3s" = DUR_23_PERCENT,
+         "3s+" = DUR_3MORE_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p4 <- 
+duration.plot %>%
+  ggbarplot(
+    position = position_dodge(0.8),
+    add = "mean_sd", lab.vjust = -2.5,
+    label = FALSE,
+   # lab.nb.digits = 2,
+  x = "Variable", y = "Value",
+  fill = "SETTING",   palette = c("deepskyblue4", "darkorange3"),
+ # palette =c("lightblue3", "orange"), #alpha = 0.5,
+  ylab = "% of frequency per min") +
+    ylim(0,100) +
+    stat_pvalue_manual(
+      duration.stats %>%
+        mutate(y.position = c(66, 50, 27, 28)),
+      hide.ns = TRUE,
+  ) +
+  labs(x = "Disposal Duration") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank(), axis.text.x = element_text(size = 10))
+
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+0-1s effect size: r = 0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+     mannwhitney_duration %>%
+  wilcox_effsize(DUR_01_PERCENT~ SETTING)
+```
+
+1-2s disposal effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+    mannwhitney_duration %>%
+  wilcox_effsize(DUR_12_PERCENT~ SETTING)
+```
+
+2-3s disposal effect size: r = -0.791 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+     mannwhitney_duration %>%
+  wilcox_effsize(DUR_23_PERCENT~ SETTING)
+```
+
+3+s disposal effect size: r = -0.846 (Large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+     mannwhitney_duration %>%
+  wilcox_effsize(DUR_3MORE_PERCENT~ SETTING)
+```
+:::
+
+## Movement
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_movement <- df.relative %>%
+  select(SETTING, DYNAMIC_PERCENT, STATIONARY_PERCENT)
+ 
+  mannwhitney_movement1 <-  mannwhitney_movement %>%
+  rename("Dynamic" = DYNAMIC_PERCENT,
+         "Stationary" = STATIONARY_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_movement1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - movement type proportions per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+movement.stats <- mannwhitney_movement1 %>%
+     # mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+movement.plot <- df.relative %>%
+      select(SETTING, DYNAMIC_PERCENT, STATIONARY_PERCENT) %>%
+  rename("Dynamic" = DYNAMIC_PERCENT,
+         "Stationary" = STATIONARY_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p6 <- 
+movement.plot %>%
+  ggbarplot(
+    position = position_dodge(0.8),
+    add = "mean_sd", lab.vjust = -5.5,
+   # add = "mean",
+    label = FALSE,
+   #lab.nb.digits = 2,
+  x = "Variable", y = "Value",
+  fill = "SETTING", palette =c("lightblue3", "orange"),
+  ylab = "% of frequency per min") +
+    ylim(0,100) +
+    stat_pvalue_manual(
+      movement.stats %>%
+        mutate(y.position = c(120, 60)),
+      hide.ns = TRUE
+  ) +
+  labs(x = "Disposal Movement Type") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank(), axis.text.x = element_text(size = 10))
+
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+Stationary disposal effect size: r = -0.288 (medium effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+   mannwhitney_movement %>%
+  wilcox_effsize(STATIONARY_PERCENT~ SETTING)
+```
+
+Dynamic disposal effect size: r = 0.288 (medium effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+  mannwhitney_movement %>%
+  wilcox_effsize(DYNAMIC_PERCENT~ SETTING)
+```
+:::
+
+## Pressure
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_pressure <- df.relative %>%
+  select(SETTING, PHYSICAL_PERCENT, CLOSING_PERCENT, CHASING_PERCENT, CORRALLING_PERCENT, NOPRESS_PERCENT)
+ 
+  mannwhitney_pressure1 <-  mannwhitney_pressure %>%
+  rename("Physical" = PHYSICAL_PERCENT,
+         "Closing" = CLOSING_PERCENT,
+         "Chasing" = CHASING_PERCENT,
+         "Corralling" = CORRALLING_PERCENT,
+         "No pressure" = NOPRESS_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+     mutate(Variable = factor(Variable, levels=c("Physical", "Closing", "Chasing", "Corralling", "No pressure"))) %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_pressure1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - pressure proportions per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+pressure.stats <- mannwhitney_pressure1 %>%
+      #mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+pressure.plot <- df.relative %>%
+      select(SETTING, CHASING_PERCENT, CLOSING_PERCENT, CORRALLING_PERCENT, NOPRESS_PERCENT, PHYSICAL_PERCENT) %>%
+  rename("Physical" = PHYSICAL_PERCENT,
+         "Closing" = CLOSING_PERCENT,
+         "Chasing" = CHASING_PERCENT,
+         "Corralling" = CORRALLING_PERCENT,
+         "No pressure" = NOPRESS_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p7 <- 
+pressure.plot %>%
+    mutate(Variable = factor(Variable, levels=c("Physical", "Closing", "Chasing", "Corralling", "No pressure"))) %>%
+  ggbarplot(
+     position = position_dodge(0.8),
+     add = "mean_sd", lab.vjust = -6.5,
+   # add = "mean",
+    label = FALSE,
+   # lab.nb.digits = 2,
+  x = "Variable", y = "Value",
+  fill = "SETTING",   palette = c("deepskyblue4", "darkorange3"),
+ # palette =c("lightblue3", "orange"), #alpha = 0.5,
+  ylab = "% of frequency per min") +
+    ylim(0,100) +
+    stat_pvalue_manual(
+      pressure.stats %>%
+        mutate(y.position = c(45, 40, 37, 48, 27)),
+      hide.ns = TRUE
+  ) +
+  labs(x = "Pressure Type") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank(), axis.text.x = element_text(size = 10))
+
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+Physical pressure effect size: r = 0.524 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+  mannwhitney_pressure %>%
+  wilcox_effsize(PHYSICAL_PERCENT~ SETTING)
+```
+
+Closing pressure effect size: r = 0.484 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_pressure %>%
+  wilcox_effsize(CLOSING_PERCENT~ SETTING)
+```
+
+Chasing pressure effect size: r = -0.147 (small effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_pressure %>%
+  wilcox_effsize(CHASING_PERCENT~ SETTING)
+```
+
+Corralling pressure effect size: r = -0.454 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_pressure %>%
+  wilcox_effsize(CORRALLING_PERCENT~ SETTING)
+```
+
+No pressure effect size: r = -0.399 (medium effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_pressure %>%
+  wilcox_effsize(NOPRESS_PERCENT~ SETTING)
+```
+:::
+:::
+
+::: panel-tabset
+## Research Q2: Carrier Density
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_oppo <- df.relative %>%
+  select(SETTING, MORE3OPPO_PERCENT, THREEOPPO_PERCENT, TWOOPPO_PERCENT, ONEOPPO_PERCENT, NOOPPO_PERCENT)
+ 
+  mannwhitney_oppo1 <-  mannwhitney_oppo %>%
+  rename("3+ oppo" = MORE3OPPO_PERCENT,
+         "3 oppo" = THREEOPPO_PERCENT,
+         "2 oppo" = TWOOPPO_PERCENT,
+         "1 oppo" = ONEOPPO_PERCENT,
+         "0 oppo" = NOOPPO_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_oppo1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - carrier density proportion per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+oppo.stats <- mannwhitney_oppo1 %>%
+     # mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+oppo.plot <- df.relative %>%
+       select(SETTING, NOOPPO_PERCENT, ONEOPPO_PERCENT, TWOOPPO_PERCENT, THREEOPPO_PERCENT, MORE3OPPO_PERCENT) %>%
+  rename("3+ oppo" = MORE3OPPO_PERCENT,
+         "3 oppo" = THREEOPPO_PERCENT,
+         "2 oppo" = TWOOPPO_PERCENT,
+         "1 oppo" = ONEOPPO_PERCENT,
+         "0 oppo" = NOOPPO_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p8 <- 
+oppo.plot %>%
+  ggbarplot(outlier.shape = NA,
+     position = position_dodge(0.8),
+     add = "mean_sd", lab.vjust = -6.2,
+   # add = "mean",
+    label = FALSE,
+   # lab.nb.digits = 2,
+  x = "Variable", y = "Value",
+  fill = "SETTING",  palette = c("deepskyblue4", "darkorange3"),
+  #palette =c("lightblue3", "orange"), #alpha = 0.5,
+  ylab = "% of frequency per min") +
+    ylim(0,100) +
+    stat_pvalue_manual(
+      oppo.stats %>%
+        mutate(y.position = c(22, 80, 55, 35, 25)),
+      hide.ns = TRUE
+  ) +
+  labs(x = "Carrier Density") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank(), axis.text.x = element_text(size = 10))
+
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+3+ oppo effect size: r = 0.458 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+   mannwhitney_oppo %>%
+  wilcox_effsize(MORE3OPPO_PERCENT~ SETTING)
+```
+
+3 oppo effect size: r = 0.623 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_oppo %>%
+  wilcox_effsize(THREEOPPO_PERCENT~ SETTING)
+```
+
+2 oppo effect size: r = 0.65 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_oppo %>%
+  wilcox_effsize(TWOOPPO_PERCENT~ SETTING)
+```
+
+1 oppo effect size: r = -0.567 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_oppo %>%
+  wilcox_effsize(ONEOPPO_PERCENT~ SETTING)
+```
+
+No oppo effect size: r = -0.441 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_oppo %>%
+  wilcox_effsize(NOOPPO_PERCENT~ SETTING)
+```
+:::
+
+## Distance
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_dist <- df.relative %>%
+  select(SETTING, SHORT_PERCENT, MEDIUM_PERCENT, DIST_NO_PERCENT)
+ 
+  mannwhitney_dist1 <-  mannwhitney_dist %>%
+  rename("0-25m" = SHORT_PERCENT,
+         "25-40m" = MEDIUM_PERCENT,
+         "Tackled - no dist" = DIST_NO_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_dist1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - disposal distance proportions per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+dist.stats <- mannwhitney_dist1 %>%
+     # mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+dist.plot <- df.relative %>%
+    select(SETTING, SHORT_PERCENT, MEDIUM_PERCENT, DIST_NO_PERCENT) %>%
+  rename("0-25m" = SHORT_PERCENT,
+         "25-40m" = MEDIUM_PERCENT,
+         "Tackled - no distance" = DIST_NO_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+#p9 <- 
+dist.plot %>%
+  ggbarplot(
+    position = position_dodge(0.8),
+    add = "mean_sd", lab.vjust = -3.6,
+   # add = "mean",
+    label = FALSE,
+   # lab.nb.digits = 2,
+  x = "Variable", y = "Value",
+  fill = "SETTING", palette =c("lightblue3", "orange"),
+  ylab = "% of frequency per min") +
+    ylim(0,100) +
+    stat_pvalue_manual(
+      dist.stats %>%
+        mutate(y.position = c(85, 45, 30)),
+      hide.ns = TRUE
+  ) +
+  #labs(x = "Disposal Distance") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank(), axis.text.x = element_text(size = 10))
+
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+0-25m disposal effect size: r = -0.552 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_dist %>%
+  wilcox_effsize(SHORT_PERCENT~ SETTING)
+```
+
+25-40m disposal effect size: r = -0.23 (small effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_dist %>%
+  wilcox_effsize(MEDIUM_PERCENT~ SETTING)
+```
+
+Tackled - no distance effect size: r = 0.806 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+   mannwhitney_dist %>%
+  wilcox_effsize(DIST_NO_PERCENT~ SETTING)
+```
+
+## 
+:::
+
+## Receiver density
+
+::: panel-tabset
+#### Mann-Whitney
+
+How closely does training replicate match characteristics during high-pressure moments ?
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ 
+ mannwhitney_receiver <- df.relative %>%
+  select(SETTING, EVEN_PERCENT, SUPERIOR_PERCENT, INFERIOR_PERCENT, LEADING_PERCENT, UNCONTESTED_PERCENT, NO_RECEIVER_PERCENT, NO_RECEIVER_TACKLED_PERCENT, SHOT_GOAL_PERCENT)
+ 
+  mannwhitney_receiver1 <-  mannwhitney_receiver %>%
+  rename("Even" = EVEN_PERCENT,
+         "Superior" = SUPERIOR_PERCENT,
+         "Inferior" = INFERIOR_PERCENT,
+         "Leading" = LEADING_PERCENT,
+         "Uncontested" = UNCONTESTED_PERCENT,
+         "No receiver" = NO_RECEIVER_PERCENT,
+         "Tackled no disposal" = NO_RECEIVER_TACKLED_PERCENT,
+         "Shot at goal" = SHOT_GOAL_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+      mutate(Variable = factor(Variable, levels=c("Uncontested", "Even", "Superior", "Inferior", "Leading", "No receiver", "Shot at goal", "Tackled no disposal"))) %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_receiver1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - receiver density proportions per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+receiver.stats <- mannwhitney_receiver1 %>%
+     # mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+receiver.plot <- df.relative %>%
+       select(SETTING, EVEN_PERCENT, INFERIOR_PERCENT, NO_RECEIVER_PERCENT, LEADING_PERCENT, SHOT_GOAL_PERCENT, SUPERIOR_PERCENT, NO_RECEIVER_TACKLED_PERCENT, UNCONTESTED_PERCENT) %>%
+  rename("Even" = EVEN_PERCENT,
+         "Superior" = SUPERIOR_PERCENT,
+         "Inferior" = INFERIOR_PERCENT,
+         "Leading" = LEADING_PERCENT,
+         "Uncontested" = UNCONTESTED_PERCENT,
+         "No receiver" = NO_RECEIVER_PERCENT,
+         "Tackled no disposal" = NO_RECEIVER_TACKLED_PERCENT,
+         "Shot at goal" = SHOT_GOAL_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+p10 <- receiver.plot %>%
+    mutate(Variable = factor(Variable, levels=c("Uncontested", "Even", "Superior", "Inferior", "Leading", "No receiver", "Shot at goal", "Tackled no disposal"))) %>%
+  ggbarplot(
+    position = position_dodge(0.8),
+    add = "mean_sd", lab.vjust = -2.2,
+   # add = "mean",
+    label = FALSE,
+   # lab.nb.digits = 2,
+  x = "Variable", y = "Value",
+  fill = "SETTING", palette =c("lightblue3", "orange"),
+  ylab = "% of frequency per min") +
+    ylim(0,100) +
+    stat_pvalue_manual(
+      receiver.stats %>%
+        mutate(y.position = c(85, 28, 18, 10, 10, 12, 20, 28)),
+      hide.ns = TRUE
+  ) +
+  font("x.text", size = 8) +
+ # labs(x = "Receiver Density") +
+  theme(plot.title = element_text(size = 9, face = "bold"), legend.position = "bottom",
+        axis.title.x = element_blank(), axis.text.x = element_text(size = 7))
+p10
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### 
+
+#### Effect size
+
+Even receiver density effect size: r = -0.0769 (small effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+   mannwhitney_receiver %>%
+  wilcox_effsize(EVEN_PERCENT~ SETTING)
+```
+
+Superior receiver density effect size: r = 0.213 (small effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_receiver %>%
+  wilcox_effsize(SUPERIOR_PERCENT~ SETTING)
+```
+
+Inferior receiver density effect size: r = 0.499 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+
+ mannwhitney_receiver %>%
+  wilcox_effsize(INFERIOR_PERCENT~ SETTING)
+```
+
+Leading receiver density effect size: r = 0.296 (medium effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_receiver %>%
+  wilcox_effsize(LEADING_PERCENT~ SETTING)
+```
+
+\
+Uncontested receiver density effect size: r = -0.736 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_receiver %>%
+  wilcox_effsize(UNCONTESTED_PERCENT~ SETTING)
+```
+
+Shot goal effect size: r = -0.693 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_receiver %>%
+  wilcox_effsize(SHOT_GOAL_PERCENT~ SETTING)
+```
+
+No receiver effect size: r = 0.33 (medium effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_receiver %>%
+  wilcox_effsize(NO_RECEIVER_PERCENT~ SETTING)
+```
+
+Tackled - no receiver effect size: r = 0.791 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+ 
+ mannwhitney_receiver %>%
+  wilcox_effsize(NO_RECEIVER_TACKLED_PERCENT~ SETTING)
+```
+:::
+
+## 
+:::
+
+::: panel-tabset
+## Research Q3: MANOVA
+
+::: panel-tabset
+Does disposal efficiency outcome differ between training and matches for high-pressure moments?
+
+```{r}
+#| echo: false
+#| warning: false
+
+result.df <- lm(cbind(EFFECTIVE_PERCENT, INEFFECTIVE_PERCENT, NEUTRAL_PERCENT) ~ SETTING, df.relative)
+
+
+Manova(result.df, test.statistic = "Pillai")
+
+
+```
+:::
+
+Significant overall difference in disposal outcomes between training & match.
+
+::: panel-tabset
+#### Mann-Whitney
+
+```{r}
+#| echo: false
+#| warning: false
+
+mannwhitney_outcome <- df.relative %>%
+  select(SETTING, EFFECTIVE_PERCENT, INEFFECTIVE_PERCENT, NEUTRAL_PERCENT)
+
+mannwhitney_outcome1 <- mannwhitney_outcome %>%
+  rename("Effective" = EFFECTIVE_PERCENT,
+         "Ineffective" = INEFFECTIVE_PERCENT,
+         "Neutral" = NEUTRAL_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  wilcox_test(Value ~ SETTING,
+              paired = FALSE,
+              exact = TRUE,
+              alternative = "two.sided",
+              conf.level = 0.95, 
+              comparisons = list(c("MATCH", "TRAINING")),
+              detailed = TRUE) %>%
+  add_significance() 
+
+mannwhitney_outcome1 %>% 
+  kbl(caption = "Mann-Whitney U-Test - outcome proportions per 60min between training & match") %>%
+  kable_classic_2(full_width = FALSE)
+
+
+
+```
+
+#### Plot
+
+```{r}
+#| echo: false
+#| warning: false
+
+outcome.stats <- mannwhitney_outcome1 %>%
+    #  mutate(p.signif = replace(p.signif, p.signif == "ns", "")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "*", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "**", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "***", "*")) %>%
+  mutate(p.signif = replace(p.signif, p.signif == "****", "*")) %>%
+    add_xy_position(x = "Variable")
+
+outcome.plot <- df.relative %>%
+      select(SETTING, EFFECTIVE_PERCENT, INEFFECTIVE_PERCENT, NEUTRAL_PERCENT) %>%
+  rename("Effective" = EFFECTIVE_PERCENT,
+         "Ineffective" = INEFFECTIVE_PERCENT,
+         "Neutral" = NEUTRAL_PERCENT) %>%
+  pivot_longer(!SETTING, names_to = "Variable", values_to = "Value")
+outcome.plot %>%
+    mutate(Variable = factor(Variable, levels=c("Effective", "Neutral", "Ineffective"))) %>%
+  ggbarplot(
+    position = position_dodge(0.8),
+    add = "mean_sd", lab.vjust = -2.7,
+   # add = "mean",
+    label = FALSE,
+    #lab.nb.digits = 2,
+  x = "Variable", y = "Value",
+  fill = "SETTING",  palette = c("deepskyblue4", "darkorange3"),
+ # palette =c("lightblue3", "orange"),# alpha = 0.5,
+  ylab = "% of frequency per min") +
+    stat_pvalue_manual(
+      outcome.stats %>%
+        mutate(y.position = c(82, 37, 51)),
+      hide.ns = TRUE
+  ) +
+      ylim(0,100) +
+  labs(x = "") +
+  theme(plot.title = element_text(size = 10, face = "bold"), legend.position = "bottom", axis.text.x = element_text(size = 10))
+
+```
+
+\*\*' indicates significant difference between training & match.
+
+#### Effect size
+
+Effective disposal effect size: r = -0.846 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+ 
+ mannwhitney_outcome %>%
+  wilcox_effsize(EFFECTIVE_PERCENT~ SETTING)
+```
+
+Ineffective disposal effect size: r = 0.791 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+
+ mannwhitney_outcome %>%
+  wilcox_effsize(INEFFECTIVE_PERCENT~ SETTING)
+```
+
+Neutral disposal effect size: r = 0.806 (large effect).
+
+```{r}
+#| echo: false
+#| warning: false
+# off win effect
+ 
+ mannwhitney_outcome %>%
+  wilcox_effsize(NEUTRAL_PERCENT~ SETTING)
+```
+:::
+:::
+
+## 
+
+```{r}
+
+#| echo: false
+#| warning: false
+
+#p1 + p2 + p3 + p4 + p5 + p6 + 
+#p7 + p8 + p9 +  
+p10 +
+  plot_layout(ncol = 2, guides = 'collect') &
+  theme(legend.position = "bottom")
+  
+
+
+
+
+```
